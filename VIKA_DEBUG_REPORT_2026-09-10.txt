@@ -1,0 +1,59 @@
+VikaTennis V4.27 — FIRST RUN / PERFORMANCE HANDOFF
+Date: 2026-09-10
+
+OBSERVED USER LOG
+- Python 3.14
+- pandas/numpy/scikit-learn/xgboost/joblib/python-telegram-bot/livetennisapi installed successfully.
+- History refresh returned HTTP 403 because the Live Tennis API key has no History entitlement.
+- Startup was intentionally changed to preserve existing model/state and continue to the Telegram bot.
+- Telegram bot responds to Russian conversational input.
+- User clicked LIVE; bot reported: “Собираю расписание и прогоняю модель…” and appeared silent.
+
+ROOT CAUSE OF SILENCE
+The Telegram handlers called day/live prediction code synchronously from the asyncio event loop. A full-day request can iterate over many matches and call PredictionEngine.predict() thousands of Monte Carlo simulations per match. While this runs, Telegram cannot process other callbacks/messages. The auto-live task had the same problem: heavy model inference ran directly inside its asyncio task.
+
+FIX APPLIED IN WORKING TREE
+- Full-day report calculation moved to asyncio.to_thread(...).
+- LIVE report calculation moved to asyncio.to_thread(...).
+- Auto-LIVE per-match analysis moved to asyncio.to_thread(...).
+- LIVE command sends immediate acknowledgement before heavy calculation.
+- Day command sends immediate acknowledgement before heavy calculation.
+- AUTO-LIVE still scans on LIVE_SCAN_SECONDS (default 45s) but no longer blocks Telegram while calculating.
+- Auto-LIVE analysis reduced from 12k pre-match simulations to 6k per scan; live update remains the detailed model layer.
+
+EXPECTED UX
+1. User presses “Прогнозы на сегодня”: immediate “Получаю расписание…” message, then results when ready.
+2. User presses “Что в лайве?” while day report is running: Telegram should still answer and start a separate LIVE calculation.
+3. AUTO-LIVE should continue scanning even while user talks to Vika.
+
+KNOWN LIMITATIONS TO VERIFY
+- Multi-market real odds require THE_ODDS_API_KEY. Without it, only odds that Live Tennis API exposes directly can trigger automatic price-based signals.
+- The model can generate candidate totals/handicap/set markets, but auto-entry should only occur when a real compatible market quote is available.
+- If History API is unavailable, current player state/model remains whatever is bundled locally; no current historical refresh is available.
+- Need to test actual Live Tennis API payload fields for score, stats, and in-play odds on a real live match.
+
+TEST SCRIPT FOR USER
+- Start bot.
+- Send “Ку!” or “Привет”.
+- Press “🔴 Что в лайве?”
+- While it is calculating, send “Привет” again or another normal message. Telegram should answer instead of freezing.
+- Turn on “🤖 Авто-режим”.
+- Wait for a real signal; no signal is expected unless the model + available price passes all filters.
+
+IMPORTANT
+This report is a handoff/diagnostic note, not a claim that betting performance is proven. Signal quality must be backtested and observed before trusting it with real money.
+
+
+## V4.27 BEHAVIOR HOTFIX
+
+Observed from user Telegram log:
+- Phrase “ты тут?” was misclassified as two player names: “ты / тут”.
+- After LIVE check, bot said “LIVE проверен”, but did not clearly state that no suitable market/signal was found.
+- Status showed “Live API: OFF” even when the bot had a configured LiveTennisProvider. Root cause: status_cmd read a non-existent `env` object from ModelHealth.report().
+- “Автомониторинг: 0 чатов” was ambiguous. `AUTO_ENABLED` is only the set of Telegram chat IDs that explicitly enabled Vika AUTO-LIVE in the current process; it is NOT monitoring of other Telegram chats and Vika does not read unrelated chats.
+
+Fixes:
+- Presence/greeting intents (`ты тут?`, `ты здесь?`, `на месте?`, etc.) now preempt player parsing.
+- LIVE response explicitly states when no suitable market/signal is found and that AUTO-LIVE continues monitoring.
+- Status uses the real LiveTennisProvider availability and shows per-current-chat AUTO state.
+- Dialogue dictionary expanded for natural presence and live-scanning replies.

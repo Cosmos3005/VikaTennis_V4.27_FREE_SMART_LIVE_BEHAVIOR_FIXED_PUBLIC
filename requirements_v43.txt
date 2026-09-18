@@ -1,0 +1,10 @@
+python-dotenv
+pandas
+numpy
+scikit-learn
+xgboost
+joblib
+python-telegram-bot
+requests
+websocket-client
+livetennisapi

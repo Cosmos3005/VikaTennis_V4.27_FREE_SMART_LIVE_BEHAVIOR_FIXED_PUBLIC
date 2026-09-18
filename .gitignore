@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+models/*
+!models/.gitkeep
+data/live_results_2023_now.csv.gz
+
+# Large data, local databases and trained models
+data/archive/
+data/predictions.sqlite
+*.joblib
+models/*.json
+data/all_matches_2015_2025.csv.gz
