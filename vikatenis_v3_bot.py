@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
-from vika_engine.prediction import PredictionEngine
+from vika_engine.prediction import PredictionEngine, HistoricalPlayerMissingError
 from vika_engine.providers.livetennis import LiveTennisProvider
 from vika_engine.prediction_journal import PredictionJournal
 from vika_engine.model_health import ModelHealth
@@ -112,7 +112,7 @@ def _build_day_report(provider_obj, engine_obj):
         rows=provider_obj.current_day()
     except Exception as e:
         return (f'❌ API: {esc(e)}', 1)
-    out=['📅 <b>VIKA — ТЕННИС НА СЕГОДНЯ</b>']; ok=0
+    out=['📅 <b>VIKA — ТЕННИС НА СЕГОДНЯ</b>']; ok=0; missing=0; failed=0
     for m in rows:
         a,b=obj_name(m,'p1'),obj_name(m,'p2')
         if not a or not b: continue
@@ -121,9 +121,16 @@ def _build_day_report(provider_obj, engine_obj):
             r=engine_obj.predict(a,b,surface,5 if str(getattr(m,'format','')).upper()=='BO5' else 3,simulations=12000)
             pick=a if r['p1_win']>=r['p2_win'] else b; prob=max(r['p1_win'],r['p2_win'])*100; ok+=1
             out.append(f'\n🎾 <b>{esc(a)} — {esc(b)}</b>\n{esc(tour)} • {surface}\n👉 {esc(pick)} <b>{prob:.1f}%</b>')
-        except Exception:
-            out.append(f'\n⚠️ {esc(a)} — {esc(b)}\nИсторической модели пока не хватило данных.')
-    out.append(f'\nМатчей в API: {len(rows)} | рассчитано: {ok}')
+        except HistoricalPlayerMissingError as e:
+            missing+=1
+            log.warning('day match absent from historical state: %s / %s; missing=%s',a,b,e.players)
+            names=', '.join(e.players)
+            out.append(f'\n⚠️ {esc(a)} — {esc(b)}\nНет в исторической базе: {esc(names)}.')
+        except Exception as e:
+            failed+=1
+            log.exception('day prediction failed for %s / %s',a,b)
+            out.append(f'\n⚠️ {esc(a)} — {esc(b)}\nОшибка расчёта; подробность записана в журнал.')
+    out.append(f'\nМатчей в API: {len(rows)} | рассчитано: {ok} | нет профиля: {missing} | ошибки: {failed}')
     return ('\n'.join(out), len(rows))
 
 VIKA_BUSY_PHRASES = {

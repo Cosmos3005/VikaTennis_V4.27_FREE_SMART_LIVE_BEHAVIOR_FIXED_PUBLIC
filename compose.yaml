@@ -1,0 +1,22 @@
+services:
+  vika-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vika-tennis-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ./models:/app/models:ro
+      - vika-data:/app/data
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+
+volumes:
+  vika-data:
