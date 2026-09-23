@@ -31,7 +31,7 @@ Use the exact local paths and filenames available to the project owner. Confirm 
 
 ## Railway configuration and secrets
 
-Keep Railway production variables in Railway, not in `.env`, the repository, or a PR. Current code reads `TELEGRAM_BOT_TOKEN`, `LIVETENNISAPI_KEY`, and optionally `THE_ODDS_API_KEY`; it also accepts settings for timezone, scan interval, odds regions and markets. Check the variable names in code before changing production configuration.
+Keep Railway production variables in Railway, not in `.env`, the repository, or a PR. Current code reads `TELEGRAM_BOT_TOKEN` and `LIVETENNISAPI_KEY`; a Live Tennis API market reference is available only on PRO and above and covers match winner only. The reference is an implied probability, not a bookmaker decimal price. Check the variable names in code before changing production configuration.
 
 A Railway deployment is not ready just because the image built. Confirm all of the following:
 
@@ -46,7 +46,7 @@ A Railway deployment is not ready just because the image built. Confirm all of t
 - Separate pre-match picks from live signals and show the event, market, quoted odds source, timestamp, model probability, and key reason.
 - “Pick of the day” means the strongest qualified candidate found by the model, not a guarantee. If nothing passes the filters, say there is no pick.
 - Never manufacture a price or combine legs solely to reach a target combined odds.
-- A +1.5 set handicap needs a genuine set-handicap quote from a connected odds source. The current live code generates game handicaps and the Odds API adapter reads `h2h`, `spreads`, and `totals`; do not label a game spread as a set handicap.
+- A +1.5 set handicap needs a genuine set-handicap quote from a connected odds source. Live Tennis API does not publish set or game handicaps; its market feed is match-winner only. Do not label a match-winner market probability or a game spread as a set-handicap quote.
 - Track settled outcomes and calibration by market before describing a market as reliable.
 
 ## First deployment recovery
