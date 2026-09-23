@@ -13,6 +13,11 @@ from .live.ml import LiveMLAdapterV47
 from .paths import root_path
 from .point_simulator import simulate_match as simulate_point_match
 
+class HistoricalPlayerMissingError(ValueError):
+    def __init__(self, players):
+        self.players=tuple(players)
+        super().__init__('Игрок не найден в исторической базе: '+', '.join(self.players))
+
 class PredictionEngine:
     def __init__(self, model_path='models/vika_models_v42.joblib', state_path=None):
         self.model_path=str(root_path(model_path))
@@ -23,7 +28,9 @@ class PredictionEngine:
         self.live_ml=LiveMLAdapterV47(self.live_model_path)
     def predict(self,p1,p2,surface='Hard',best_of=3,odds1=None,odds2=None,simulations=100000):
         snap=self.state.snapshot(p1,p2,surface,pd.Timestamp.utcnow().tz_localize(None),best_of)
-        if snap is None: raise ValueError(f'Игрок не найден в исторической базе: {p1} / {p2}')
+        if snap is None:
+            missing=[name for name in (p1,p2) if self.state.get(name) is None]
+            raise HistoricalPlayerMissingError(missing or (p1,p2))
         X=pd.DataFrame([snap])
         # Map the live/player-state vocabulary to the v4.2 training vocabulary.
         aliases={

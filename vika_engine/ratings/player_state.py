@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 from collections import deque
 from datetime import datetime
-import math, json, re
+import math, json, re, unicodedata
 from pathlib import Path
 import pandas as pd
 from .glicko2 import Glicko2Rating
@@ -145,6 +145,17 @@ class PlayerStateStore:
     def get(self,name):
         key=str(name).strip().lower()
         if key in self.players: return self.players[key]
+        # Providers may format a player's name as "Surname, Given" while the
+        # historical archive uses "Given Surname". Compare normalized tokens
+        # exactly before using the older substring fallback; require a unique hit.
+        def name_key(value):
+            value=unicodedata.normalize('NFKD',str(value)).casefold()
+            tokens=re.findall(r'[^\W_]+',value,flags=re.UNICODE)
+            return tuple(sorted(tokens))
+        wanted=name_key(name)
+        if wanted:
+            hits=[p for k,p in self.players.items() if name_key(k)==wanted]
+            if len(hits)==1: return hits[0]
         # tolerant substring match
         hits=[p for k,p in self.players.items() if key in k or k in key]
         return hits[0] if len(hits)==1 else None
