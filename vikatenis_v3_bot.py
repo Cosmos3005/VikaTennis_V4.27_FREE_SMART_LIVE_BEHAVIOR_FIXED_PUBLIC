@@ -186,7 +186,9 @@ def _build_live_report(provider_obj, engine_obj):
                     line = f'  • {esc(c["label"])} — модель {c["prob"]*100:.0f}% | fair-модель {c["fair_odds"]:.2f}'
                     if live_market and c.get('market') == 'match_winner':
                         market_p = live_market['p1'] if c.get('side') == a else live_market['p2']
-                        line += f' | рынок Live Tennis {market_p*100:.1f}% (mid)'
+                        market_ts = live_market.get('timestamp')
+                        time_text = f' • {esc(market_ts)}' if market_ts else ''
+                        line += f' | рынок Live Tennis {market_p*100:.1f}% (mid){time_text}'
                     lines.append(line)
             else:
                 lines.append('  • Пока подходящего рынка для входа не вижу.')
