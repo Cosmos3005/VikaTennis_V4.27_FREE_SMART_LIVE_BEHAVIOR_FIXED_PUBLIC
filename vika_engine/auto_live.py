@@ -47,6 +47,61 @@ def extract_odds(frame: dict[str,Any]):
         if r:return r
     return None
 
+
+def extract_livetennis_market_probability(frame: dict[str, Any]):
+    """Read Live Tennis API's PRO match-winner market midpoint, if embedded.
+
+    The API exposes probability-like market prices (0..1), not bookmaker
+    decimal odds. Keep this as a market reference and never pass it to the
+    decimal-odds value filter.
+    """
+    market = frame.get('market') if isinstance(frame, dict) else None
+    if market is None:
+        return None
+    if hasattr(market, 'model_dump'):
+        try:
+            market = market.model_dump()
+        except Exception:
+            pass
+    if not isinstance(market, dict):
+        market = getattr(market, '__dict__', None)
+    if not isinstance(market, dict):
+        return None
+    status = str(market.get('status') or '').strip().lower()
+    if status in ('closed', 'resolved', 'suspended'):
+        return None
+    prices = market.get('prices') or []
+    if not isinstance(prices, (list, tuple)):
+        return None
+    by_side = {}
+    # Live Tennis returns ticks newest first. Keep the first valid midpoint per side.
+    for tick in prices:
+        if hasattr(tick, 'model_dump'):
+            try:
+                tick = tick.model_dump()
+            except Exception:
+                pass
+        if not isinstance(tick, dict):
+            tick = getattr(tick, '__dict__', None)
+        if not isinstance(tick, dict):
+            continue
+        try:
+            side = int(tick.get('side'))
+            mid = float(tick.get('mid'))
+        except (TypeError, ValueError):
+            continue
+        if side in (1, 2) and 0.0 < mid < 1.0 and side not in by_side:
+            by_side[side] = {'probability': mid, 'timestamp': tick.get('timestamp')}
+    if 1 not in by_side or 2 not in by_side:
+        return None
+    timestamps = [by_side[1].get('timestamp'), by_side[2].get('timestamp')]
+    return {
+        'p1': by_side[1]['probability'],
+        'p2': by_side[2]['probability'],
+        'timestamp': max(timestamps, key=lambda x: str(x or '')),
+        'status': status or None,
+    }
+
 def signal_from_live(p1,p2,live,pre,odds=None):
     p1p=float(live.get('p1_win',.5)); p2p=1-p1p
     conf=float(live.get('confidence',0))

@@ -9,7 +9,7 @@ from vika_engine.prediction import PredictionEngine
 from vika_engine.providers.livetennis import LiveTennisProvider
 from vika_engine.prediction_journal import PredictionJournal
 from vika_engine.model_health import ModelHealth
-from vika_engine.auto_live import extract_odds, signal_from_live
+from vika_engine.auto_live import extract_odds, extract_livetennis_market_probability, signal_from_live
 from vika_engine.auto_live_report import AutoLiveReport
 from vika_engine.live_markets import market_candidates
 from vika_engine.odds_provider import OddsProvider
@@ -181,7 +181,15 @@ def _build_live_report(provider_obj, engine_obj):
             live=engine_obj.update_live(pre,frame_of(m)); cs=market_candidates(a,b,live,pre,frame_of(m))[:4]
             if cs:
                 suitable += len(cs)
-                for c in cs: lines.append(f'  • {esc(c["label"])} — модель {c["prob"]*100:.0f}% | fair {c["fair_odds"]:.2f}')
+                live_market = extract_livetennis_market_probability(frame_of(m))
+                for c in cs:
+                    line = f'  • {esc(c["label"])} — модель {c["prob"]*100:.0f}% | fair-модель {c["fair_odds"]:.2f}'
+                    if live_market and c.get('market') == 'match_winner':
+                        market_p = live_market['p1'] if c.get('side') == a else live_market['p2']
+                        market_ts = live_market.get('timestamp')
+                        time_text = f' • {esc(market_ts)}' if market_ts else ''
+                        line += f' | рынок Live Tennis {market_p*100:.1f}% (mid){time_text}'
+                    lines.append(line)
             else:
                 lines.append('  • Пока подходящего рынка для входа не вижу.')
         except Exception as e:
@@ -208,12 +216,14 @@ async def status_cmd(update,context):
     quota_text = f'{q.get("calls")} / {q.get("limit_per_day",100)} использовано, осталось {rem}' if rem is not None else 'не удалось получить usage'
     interval=provider.suggested_auto_interval() if provider.available else None
     interval_text=f'{interval//60} мин' if interval else 'пауза до сброса'
+    tier=str(q.get('tier') or 'unknown').upper()
+    market_state = 'доступен' if tier in ('PRO','ULTRA') else f'требует PRO (тариф: {tier})'
     msg=(f'🟢 <b>Vika status</b>\nCore: {"OK" if r["ok"] else "MISSING"}\n'
          f'Live model: <code>{esc(r.get("live_artifact") or "fallback")}</code>\n'
          f'Live API: <b>{esc(live_state)}</b>\n'
          f'API quota: <b>{esc(quota_text)}</b>\n'
          f'Следующий авто-скан: примерно <b>{esc(interval_text)}</b>\n'
-         f'Odds API: <b>{esc(odds_state)}</b>\n'
+         f'Рынок победителя Live Tennis: <b>{esc(market_state)}</b> (рынки фор недоступны через этот API)\n'
          f'Автомониторинг этого чата: <b>{auto_state}</b>\n'
          f'Чатов в авто-LIVE: <b>{len(AUTO_ENABLED)}</b>\n'
          f'Чатов для дневной рассылки: <b>{len(CHATS)}</b>')
